@@ -1,4 +1,9 @@
-"""Cấu hình bot, đọc từ biến môi trường (.env)."""
+"""Cấu hình bot, đọc từ biến môi trường (.env).
+
+Lưu ý: các biến điều khiển Chrome/FMS session (BOT_DELI_CHROME_*,
+BOT_DELI_BROWSER_*) được `src/fms/browser_fetch.py` tự đọc thẳng từ
+`os.environ`, không đi qua `Settings` ở đây — xem `.env.example`.
+"""
 
 from __future__ import annotations
 
@@ -7,6 +12,8 @@ from dataclasses import dataclass
 from datetime import timedelta
 
 from dotenv import load_dotenv
+
+from .fms.constants import BDA_STATION_ID, BDA_STATION_NAME
 
 load_dotenv()
 
@@ -20,9 +27,11 @@ def _get(name: str, default: str | None = None, required: bool = False) -> str |
 
 @dataclass(frozen=True)
 class Settings:
-    api_base_url: str
-    api_token: str
+    # Tên trạm BDA trong FMS (dùng để chọn role Chrome đăng nhập + so khớp
+    # trip_station trả về từ API) và id trạm (dùng để lọc trip theo
+    # middle_station). Mặc định lấy theo giá trị đã xác nhận từ bot_deli_ver1.
     bda_code: str
+    bda_station_id: str
 
     db_path: str
 
@@ -38,9 +47,8 @@ class Settings:
     @classmethod
     def from_env(cls) -> "Settings":
         return cls(
-            api_base_url=_get("SOURCE_API_BASE_URL", required=True),
-            api_token=_get("SOURCE_API_TOKEN", required=True),
-            bda_code=_get("BDA_HUB_CODE", default="BDA"),
+            bda_code=_get("BDA_HUB_CODE", default=BDA_STATION_NAME),
+            bda_station_id=_get("BDA_STATION_ID", default=BDA_STATION_ID),
             db_path=_get("SQLITE_DB_PATH", default="data/reconciliation.db"),
             google_credentials_path=os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON") or None,
             google_spreadsheet_id=os.environ.get("GOOGLE_SPREADSHEET_ID") or None,

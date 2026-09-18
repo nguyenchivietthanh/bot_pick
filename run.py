@@ -1,10 +1,14 @@
-"""Entrypoint chạy bot đối soát 24/7."""
+"""Entrypoint chạy bot đối soát 24/7.
+
+Chrome cần đã đăng nhập sẵn FMS (https://spx.shopee.vn) với role/station =
+BDA_HUB_CODE trước khi chạy — xem README mục "Chuẩn bị Chrome/FMS".
+"""
 
 import logging
 import sys
 
-from src.api_client import HttpInternalAPIClient
 from src.config import Settings
+from src.fms.client import FmsInternalAPIClient
 from src.poller import ReconciliationPoller
 from src.sheets.writer import SheetsWriter
 from src.storage.db import make_session_factory
@@ -21,7 +25,11 @@ def main() -> None:
 
     settings = Settings.from_env()
 
-    api_client = HttpInternalAPIClient(settings.api_base_url, settings.api_token)
+    api_client = FmsInternalAPIClient(
+        role=settings.bda_code,
+        bda_station_name=settings.bda_code,
+        bda_station_id=settings.bda_station_id,
+    )
 
     session_factory = make_session_factory(settings.db_path)
     repository = ReconciliationRepository(session_factory)

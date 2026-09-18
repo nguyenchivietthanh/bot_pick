@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from .api_client import SourceAPIClient
 from .config import Settings
 from .domain import LinehaulLeg, ReconciliationResult
-from .reconciliation import advance_result_status, build_missing_results, diff_orders
+from .reconciliation import advance_result_status, build_missing_results
 from .sheets.writer import SheetsWriter
 from .storage.repository import ReconciliationRepository
 
@@ -70,9 +70,9 @@ class ReconciliationPoller:
         if leg.actual_arrival is None:
             return  # chặng chưa thực sự đến BDA, bỏ qua vòng này
 
-        expected = self.api_client.get_expected_orders(leg.lt_code, leg.leg_id)
-        actual = self.api_client.get_actual_received_orders(leg.lt_code, leg.leg_id)
-        missing = diff_orders(expected, actual)
+        # Nguồn dữ liệu (FMS Pending Inbound) đã tự trả về đúng phần "chưa tới
+        # BDA" - không cần tự diff expected vs actual nữa.
+        missing = self.api_client.get_pending_orders(leg.lt_code, leg.leg_id)
 
         results = build_missing_results(
             missing, leg.actual_arrival, now, self.settings.grace_period
@@ -82,9 +82,7 @@ class ReconciliationPoller:
         self.repository.upsert_checkpoint(leg, now)
 
         if results:
-            logger.info(
-                "LT=%s leg=%s: %d/%d đơn thiếu", leg.lt_code, leg.leg_id, len(missing), len(expected)
-            )
+            logger.info("LT=%s leg=%s: %d đơn đang thiếu tại BDA", leg.lt_code, leg.leg_id, len(missing))
         self._sync_sheet(results)
 
     def _recheck_open_results(self, now: datetime) -> None:
@@ -98,8 +96,10 @@ class ReconciliationPoller:
 
         changed: list[ReconciliationResult] = []
         for (lt_code, leg_id), results in by_leg.items():
-            actual = self.api_client.get_actual_received_orders(lt_code, leg_id)
-            received_codes = {a.order_code for a in actual}
+            still_pending_codes = {o.order_code for o in self.api_client.get_pending_orders(lt_code, leg_id)}
+            # "received" = đơn đang theo dõi mà giờ không còn nằm trong danh
+            # sách Pending Inbound nữa -> FMS đã ghi nhận tới BDA.
+            received_codes = {r.order_code for r in results if r.order_code not in still_pending_codes}
             for r in results:
                 if advance_result_status(
                     r,
