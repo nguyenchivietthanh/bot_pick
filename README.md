@@ -1,0 +1,2 @@
+# bot_pick
+BOT_DOISOAT_PICKUP
